@@ -21,14 +21,14 @@ class APIClient {
     func fetchArticles() async throws -> [Article] {
         let url = try makeURL("/api/companion/articles")
         let request = makeRequest(url: url)
-        let (data, _) = try await session.data(for: request)
+        let (data, _) = try await perform(request)
         return try JSONDecoder().decode([Article].self, from: data)
     }
 
     func fetchMarkdown(articleID: Int) async throws -> String {
         let url = try makeURL("/api/companion/articles/\(articleID)/markdown")
         let request = makeRequest(url: url)
-        let (data, _) = try await session.data(for: request)
+        let (data, _) = try await perform(request)
         return String(data: data, encoding: .utf8) ?? ""
     }
 
@@ -36,7 +36,23 @@ class APIClient {
         let url = try makeURL("/api/companion/articles/\(articleID)/downloaded")
         var request = makeRequest(url: url)
         request.httpMethod = "POST"
-        _ = try await session.data(for: request)
+        _ = try await perform(request)
+    }
+
+    private func perform(_ request: URLRequest, maxRetries: Int = 5) async throws -> (Data, URLResponse) {
+        var delay: Double = 1.0
+        for attempt in 0...maxRetries {
+            let (data, response) = try await session.data(for: request)
+            if let http = response as? HTTPURLResponse, http.statusCode == 429 {
+                if attempt == maxRetries { throw URLError(.userAuthenticationRequired) }
+                print("[APIClient] rate limited, retrying in \(delay)s")
+                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                delay = min(delay * 2, 60)
+                continue
+            }
+            return (data, response)
+        }
+        throw URLError(.unknown)
     }
 
     private func makeURL(_ path: String) throws -> URL {
