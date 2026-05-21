@@ -6,6 +6,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var poller: Poller?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if let icon = Icons.appIcon {
+            NSApp.applicationIconImage = icon
+        }
         setupStatusItem()
 
         if let config = Config.load(), !config.savePath.isEmpty {

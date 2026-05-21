@@ -1,4 +1,7 @@
 import AppKit
+import Foundation
+
+ProcessInfo.processInfo.processName = "ReadItSoonCompanion"
 
 let app = NSApplication.shared
 let delegate = AppDelegate()
