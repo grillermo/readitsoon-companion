@@ -60,11 +60,10 @@ class Poller {
     private func downloadArticle(_ article: Article) async throws {
         let markdown = try await client.fetchMarkdown(articleID: article.id)
 
-        let domainDir = (savePath as NSString).appendingPathComponent(article.domain)
-        try FileManager.default.createDirectory(atPath: domainDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(atPath: savePath, withIntermediateDirectories: true)
 
         let title = sanitize(article.title)
-        let filePath = uniquePath(directory: domainDir, title: title)
+        let filePath = uniquePath(directory: savePath, title: title)
         try markdown.write(toFile: filePath, atomically: true, encoding: .utf8)
 
         try await client.markDownloaded(articleID: article.id)
