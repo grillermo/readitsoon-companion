@@ -35,13 +35,13 @@ add_column :articles, :downloaded_at, :datetime
 
 ### New Endpoints
 
-All companion API endpoints authenticate via `email` + `token` params, validated against `companion_tokens`.
+All companion API endpoints authenticate via `Authorization: Bearer {token}` header + `email` param. Token validated against `companion_tokens`. All endpoints verify that the requested article belongs to the authenticated email (`article.email_id == token.email_id`).
 
 #### `GET /api/companion/articles`
 
 **Params:** `email`, `token`
 
-**Response:** JSON array of articles where `downloaded_at IS NULL` for that email.
+**Response:** JSON array of articles where `downloaded_at IS NULL AND sent_status = 'delivered' AND markdown IS NOT NULL` for that email. Domain is extracted from the article's `url` column at response time.
 
 ```json
 [
@@ -64,7 +64,7 @@ All companion API endpoints authenticate via `email` + `token` params, validated
 
 #### `GET /download-companion`
 
-**Auth:** Only accessible to paying users (`subscription_status != "free"`).
+**Auth:** Only accessible to paying users (`subscription_status IN ('active', 'trialing')`).
 
 **Page content:**
 - Marketing copy:
@@ -85,8 +85,8 @@ All companion API endpoints authenticate via `email` + `token` params, validated
 2. Compile Go binary:
    ```bash
    cd /path/to/readitsoon-companion
-   CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -ldflags "-X main.pollURL=https://readitsoon.com/api/companion/articles -X main.userEmail=user@kindle.com -X main.authToken=abc123" -o /tmp/companion-arm64
-   CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.pollURL=https://readitsoon.com/api/companion/articles -X main.userEmail=user@kindle.com -X main.authToken=abc123" -o /tmp/companion-amd64
+   CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -ldflags "-X main.baseURL=https://readitsoon.com -X main.userEmail=user@kindle.com -X main.authToken=abc123" -o /tmp/companion-arm64
+   CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.baseURL=https://readitsoon.com -X main.userEmail=user@kindle.com -X main.authToken=abc123" -o /tmp/companion-amd64
    lipo -create -output /tmp/readitsoon-companion /tmp/companion-arm64 /tmp/companion-amd64
    ```
 3. Return binary as file download (`Content-Disposition: attachment; filename=readitsoon-companion`)
@@ -99,11 +99,13 @@ All companion API endpoints authenticate via `email` + `token` params, validated
 
 ```go
 var (
-    pollURL   string // set via -ldflags
+    baseURL   string // set via -ldflags, e.g. "https://readitsoon.com"
     userEmail string // set via -ldflags
     authToken string // set via -ldflags
 )
 ```
+
+Endpoints derived at runtime: `baseURL + "/api/companion/articles"`, etc.
 
 ### Runtime Config
 
@@ -138,15 +140,15 @@ Stored at `~/.readitsoon-companion.json`:
 
 Every 60 seconds:
 
-1. `GET {pollURL}?email={userEmail}&token={authToken}`
+1. `GET {baseURL}/api/companion/articles?email={userEmail}` with `Authorization: Bearer {authToken}` header
 2. If empty array: no-op
 3. If articles returned:
    - Change icon to clock state
    - Download up to 3 concurrently (buffered channel semaphore)
    - For each article:
-     a. `GET {baseURL}/api/companion/markdown/{id}?email={userEmail}&token={authToken}`
-     b. Save to `{savePath}/{domain}/{sanitized-title}.md`
-     c. `POST {baseURL}/api/companion/articles/{id}/downloaded` with `email` and `token`
+     a. `GET {baseURL}/api/companion/markdown/{id}?email={userEmail}` with Bearer token header
+     b. Save to `{savePath}/{domain}/{sanitized-title}.md` (append `-2`, `-3` etc. on filename collision)
+     c. `POST {baseURL}/api/companion/articles/{id}/downloaded?email={userEmail}` with Bearer token header
    - After all downloads complete: change icon to checkmark state
    - After 5 seconds: revert icon to default
 
@@ -162,6 +164,7 @@ Every 60 seconds:
 
 - Domain extracted from article's source URL
 - Title sanitized: lowercase, spaces to hyphens, strip non-alphanumeric except hyphens
+- On filename collision: append `-2`, `-3`, etc.
 
 ### Icon Processing
 
@@ -191,5 +194,8 @@ Build step (pre-compilation or embedded):
 
 - Token is per-user, revocable by deleting the `companion_tokens` record
 - API endpoints validate token+email pair on every request
+- All endpoints verify article ownership (article.email_id == token.email_id)
+- Credentials sent via Authorization header (not query params) to avoid log exposure
 - Binary contains credentials — user should not share it
 - HTTPS only for all API calls
+- Rate limit: server rejects polls more frequent than 1/30s per token
