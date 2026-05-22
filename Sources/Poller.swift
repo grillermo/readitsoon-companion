@@ -4,21 +4,30 @@ enum PollerState {
     case idle
     case downloading
     case done
+    case error
+}
+
+struct PollerUpdate {
+    let state: PollerState
+    let pendingTitles: [String]
+    let lastDownloadedTitle: String?
 }
 
 class Poller {
     private let client: APIClient
     private let savePath: String
-    private let onStateChange: (PollerState) -> Void
+    private let onUpdate: (PollerUpdate) -> Void
     private var timer: Timer?
+    private let progress = PollerProgress()
 
-    init(client: APIClient, savePath: String, onStateChange: @escaping (PollerState) -> Void) {
+    init(client: APIClient, savePath: String, onUpdate: @escaping (PollerUpdate) -> Void) {
         self.client = client
         self.savePath = savePath
-        self.onStateChange = onStateChange
+        self.onUpdate = onUpdate
     }
 
     func start() {
+        Task { await emitUpdate(state: .idle) }
         poll()
         timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             self?.poll()
@@ -29,13 +38,20 @@ class Poller {
         Task {
             do {
                 let articles = try await client.fetchArticles()
-                guard !articles.isEmpty else { return }
+                let titles = articles.map(\.title)
+                await progress.setPending(titles)
 
-                onStateChange(.downloading)
+                if articles.isEmpty {
+                    await emitUpdate(state: .idle)
+                    return
+                }
+
+                await emitUpdate(state: .downloading)
                 await downloadAll(articles)
-                onStateChange(.done)
+                await emitUpdate(state: .done)
             } catch {
                 print("[Poller] error: \(error)")
+                await emitUpdate(state: .error)
             }
         }
     }
@@ -48,8 +64,10 @@ class Poller {
                     await semaphore.wait()
                     do {
                         try await self.downloadArticle(article)
+                        await self.updateAfterDownload(title: article.title)
                     } catch {
                         print("[Poller] failed article \(article.id): \(error)")
+                        await self.updateAfterFailure(title: article.title)
                     }
                     await semaphore.signal()
                 }
@@ -89,5 +107,52 @@ class Poller {
             if !FileManager.default.fileExists(atPath: candidate) { return candidate }
             n += 1
         }
+    }
+
+    private func updateAfterDownload(title: String) async {
+        await progress.markDownloaded(title)
+        await emitUpdate(state: .downloading)
+    }
+
+    private func updateAfterFailure(title: String) async {
+        await progress.removePending(title)
+        await emitUpdate(state: .downloading)
+    }
+
+    private func emitUpdate(state: PollerState) async {
+        let snapshot = await progress.snapshot()
+        let update = PollerUpdate(
+            state: state,
+            pendingTitles: snapshot.pendingTitles,
+            lastDownloadedTitle: snapshot.lastDownloadedTitle
+        )
+        onUpdate(update)
+    }
+}
+
+actor PollerProgress {
+    private var pendingTitles: [String] = []
+    private var lastDownloadedTitle: String?
+
+    func setPending(_ titles: [String]) {
+        pendingTitles = titles
+    }
+
+    func markDownloaded(_ title: String) {
+        removeOnePending(title)
+        lastDownloadedTitle = title
+    }
+
+    func removePending(_ title: String) {
+        removeOnePending(title)
+    }
+
+    func snapshot() -> (pendingTitles: [String], lastDownloadedTitle: String?) {
+        (pendingTitles, lastDownloadedTitle)
+    }
+
+    private func removeOnePending(_ title: String) {
+        guard let index = pendingTitles.firstIndex(of: title) else { return }
+        pendingTitles.remove(at: index)
     }
 }

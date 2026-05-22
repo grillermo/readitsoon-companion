@@ -2,16 +2,23 @@ import AppKit
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
-    private var statusMenuItem: NSMenuItem!
     private var poller: Poller?
+    private var statusPanel: StatusPanelController!
+    private var savePath = ""
+    private var statusText = "Monitoring"
+    private var pendingTitles: [String] = []
+    private var lastDownloadedTitle: String?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let icon = Icons.appIcon {
             NSApp.applicationIconImage = icon
         }
         setupStatusItem()
+        setupStatusPanel()
 
         if let config = Config.load(), !config.savePath.isEmpty {
+            savePath = config.savePath
+            refreshPanel()
             startPolling(savePath: config.savePath)
         } else {
             promptFirstRun()
@@ -29,36 +36,37 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             } else {
                 button.title = "RS"
             }
+            button.target = self
+            button.action = #selector(toggleStatusPanel)
+            button.sendAction(on: [.leftMouseUp])
         }
-
-        buildMenu()
     }
 
-    private func buildMenu() {
-        let menu = NSMenu()
+    private func setupStatusPanel() {
+        statusPanel = StatusPanelController()
+        statusPanel.onChooseFolder = { [weak self] in
+            self?.chooseSaveFolder()
+        }
+        statusPanel.onQuit = {
+            NSApp.terminate(nil)
+        }
+        refreshPanel()
+    }
 
-        statusMenuItem = NSMenuItem(
-            title: "Monitoring \(Credentials.userEmail)",
-            action: nil,
-            keyEquivalent: ""
-        )
-        statusMenuItem.isEnabled = false
-        menu.addItem(statusMenuItem)
+    @objc private func toggleStatusPanel() {
+        guard let button = statusItem.button else { return }
+        refreshPanel()
+        statusPanel.toggle(relativeTo: button)
+    }
 
-        menu.addItem(.separator())
-        menu.addItem(
-            withTitle: "Choose where to save downloaded articles...",
-            action: #selector(chooseSaveFolder),
-            keyEquivalent: ""
+    private func refreshPanel() {
+        statusPanel?.setContent(
+            email: Credentials.userEmail,
+            savePath: savePath,
+            statusText: statusText,
+            pendingTitles: pendingTitles,
+            lastDownloaded: lastDownloadedTitle
         )
-        menu.addItem(.separator())
-        menu.addItem(
-            withTitle: "Quit",
-            action: #selector(NSApplication.terminate(_:)),
-            keyEquivalent: "q"
-        )
-
-        statusItem.menu = menu
     }
 
     // MARK: - First Run / Choose Folder
@@ -107,7 +115,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let savePath = url.path
+        self.savePath = savePath
         Config.save(Config(savePath: savePath))
+        refreshPanel()
 
         // Restart poller with new path
         poller = nil
@@ -123,23 +133,32 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             token: Credentials.authToken
         )
 
-        poller = Poller(client: client, savePath: savePath) { [weak self] state in
-            DispatchQueue.main.async { self?.updateStatus(state) }
+        poller = Poller(client: client, savePath: savePath) { [weak self] update in
+            DispatchQueue.main.async { self?.applyPollerUpdate(update) }
         }
         poller?.start()
     }
 
-    private func updateStatus(_ state: PollerState) {
-        switch state {
+    private func applyPollerUpdate(_ update: PollerUpdate) {
+        pendingTitles = update.pendingTitles
+        lastDownloadedTitle = update.lastDownloadedTitle
+
+        switch update.state {
         case .idle:
-            statusMenuItem.title = "Monitoring \(Credentials.userEmail)"
+            statusText = "Monitoring \(Credentials.userEmail)"
         case .downloading:
-            statusMenuItem.title = "⬇️ Downloading..."
+            statusText = "Downloading files..."
         case .done:
-            statusMenuItem.title = "✅ Downloads complete"
+            statusText = "Downloads complete"
             DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
-                self?.statusMenuItem.title = "Monitoring \(Credentials.userEmail)"
+                guard let self else { return }
+                self.statusText = "Monitoring \(Credentials.userEmail)"
+                self.refreshPanel()
             }
+        case .error:
+            statusText = "Error while syncing"
         }
+
+        refreshPanel()
     }
 }
