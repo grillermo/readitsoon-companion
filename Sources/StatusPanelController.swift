@@ -72,6 +72,10 @@ final class StatusPanelController: NSWindowController, NSTableViewDataSource {
         window?.orderOut(nil)
     }
 
+    override func cancelOperation(_ sender: Any?) {
+        closeWindow()
+    }
+
     func numberOfRows(in tableView: NSTableView) -> Int {
         pendingTitles.count
     }
@@ -170,8 +174,10 @@ final class StatusPanelController: NSWindowController, NSTableViewDataSource {
         let folderButton = NSButton(title: "Change save folder", target: self, action: #selector(chooseFolderTapped))
         folderButton.bezelStyle = .rounded
 
-        let quitButton = NSButton(title: "Quit", target: self, action: #selector(quitTapped))
+        let quitButton = NSButton(title: "Quit (⌘ Q)", target: self, action: #selector(quitTapped))
         quitButton.bezelStyle = .rounded
+        quitButton.keyEquivalent = "q"
+        quitButton.keyEquivalentModifierMask = [.command]
 
         let stack = NSStackView(views: [
             titleLabel,

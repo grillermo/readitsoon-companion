@@ -15,6 +15,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         setupStatusItem()
         setupStatusPanel()
+        statusWindow.showWindow()
 
         if let config = Config.load(), !config.savePath.isEmpty {
             savePath = config.savePath
@@ -57,7 +58,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         refreshPanel()
 
         guard let event = NSApp.currentEvent else {
-            statusWindow.toggle()
+            statusWindow.showWindow()
             return
         }
 
@@ -66,7 +67,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        statusWindow.toggle()
+        statusWindow.showWindow()
     }
 
     private func isContextClick(_ event: NSEvent) -> Bool {
