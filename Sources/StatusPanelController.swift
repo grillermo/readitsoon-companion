@@ -1,7 +1,6 @@
 import AppKit
 
 final class StatusPanelController: NSWindowController, NSTableViewDataSource {
-    private let emailLabel = NSTextField(labelWithString: "")
     private let statusLabel = NSTextField(labelWithString: "")
     private let cadenceLabel = NSTextField(labelWithString: "Checks every 60 seconds")
     private let folderLabel = NSTextField(labelWithString: "")
@@ -9,35 +8,28 @@ final class StatusPanelController: NSWindowController, NSTableViewDataSource {
     private let pendingCountLabel = NSTextField(labelWithString: "Pending downloads (0)")
     private let tableView = NSTableView()
     private var pendingTitles: [String] = []
-    private var localMonitor: Any?
-    private var globalMonitor: Any?
 
     var onChooseFolder: (() -> Void)?
     var onQuit: (() -> Void)?
 
     init() {
-        let panel = NSPanel(
+        let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 380, height: 430),
-            styleMask: [.nonactivatingPanel, .fullSizeContentView],
+            styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
         )
-        panel.level = .floating
-        panel.isOpaque = false
-        panel.backgroundColor = NSColor(calibratedWhite: 0.1, alpha: 0.98)
-        panel.hasShadow = true
-        panel.hidesOnDeactivate = true
-        panel.collectionBehavior = [.transient, .ignoresCycle]
-        panel.isMovableByWindowBackground = false
-        panel.titleVisibility = .hidden
-        panel.titlebarAppearsTransparent = true
-        panel.standardWindowButton(.closeButton)?.isHidden = true
-        panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
-        panel.standardWindowButton(.zoomButton)?.isHidden = true
+        window.title = "ReadItSoon Companion"
+        window.isReleasedWhenClosed = false
+        window.setContentSize(NSSize(width: 380, height: 430))
+        window.center()
+        window.isOpaque = false
+        window.backgroundColor = NSColor(calibratedWhite: 0.1, alpha: 0.98)
+        window.hasShadow = true
+        window.isMovableByWindowBackground = false
 
-        super.init(window: panel)
+        super.init(window: window)
         buildUI()
-        startClickMonitors()
     }
 
     @available(*, unavailable)
@@ -46,7 +38,6 @@ final class StatusPanelController: NSWindowController, NSTableViewDataSource {
     }
 
     func setContent(email: String, savePath: String, statusText: String, pendingTitles: [String], lastDownloaded: String?) {
-        emailLabel.stringValue = email
         folderLabel.stringValue = savePath.isEmpty ? "No save folder selected" : savePath
         statusLabel.stringValue = statusText
         pendingCountLabel.stringValue = "Pending downloads (\(pendingTitles.count))"
@@ -59,19 +50,25 @@ final class StatusPanelController: NSWindowController, NSTableViewDataSource {
         }
     }
 
-    func toggle(relativeTo button: NSStatusBarButton) {
-        guard let panel = window else { return }
+    func toggle() {
+        guard let window else { return }
 
-        if panel.isVisible {
-            panel.orderOut(nil)
+        if window.isVisible {
+            window.orderOut(nil)
             return
         }
 
-        positionPanel(relativeTo: button)
-        panel.orderFrontRegardless()
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
     }
 
-    func closePanel() {
+    func showWindow() {
+        guard let window else { return }
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    func closeWindow() {
         window?.orderOut(nil)
     }
 
@@ -132,10 +129,6 @@ final class StatusPanelController: NSWindowController, NSTableViewDataSource {
         titleLabel.font = NSFont.systemFont(ofSize: 16, weight: .semibold)
         titleLabel.textColor = NSColor.white
 
-        emailLabel.font = NSFont.systemFont(ofSize: 12, weight: .regular)
-        emailLabel.textColor = NSColor(calibratedWhite: 0.82, alpha: 1)
-        emailLabel.lineBreakMode = .byTruncatingTail
-
         statusLabel.font = NSFont.systemFont(ofSize: 13, weight: .medium)
         statusLabel.textColor = NSColor(calibratedRed: 0.45, green: 0.86, blue: 0.67, alpha: 1)
 
@@ -182,18 +175,18 @@ final class StatusPanelController: NSWindowController, NSTableViewDataSource {
 
         let stack = NSStackView(views: [
             titleLabel,
-            emailLabel,
+            separatorView(),
             statusLabel,
             cadenceLabel,
-            separatorView(),
-            folderTitleLabel,
-            folderLabel,
             separatorView(),
             pendingCountLabel,
             scrollView,
             emptyStateLabel,
             separatorView(),
+            folderTitleLabel,
+            folderLabel,
             folderButton,
+            separatorView(),
             quitButton
         ])
         stack.orientation = NSUserInterfaceLayoutOrientation.vertical
@@ -218,7 +211,7 @@ final class StatusPanelController: NSWindowController, NSTableViewDataSource {
     }
 
     @objc private func chooseFolderTapped() {
-        closePanel()
+        closeWindow()
         onChooseFolder?()
     }
 
@@ -226,53 +219,6 @@ final class StatusPanelController: NSWindowController, NSTableViewDataSource {
         onQuit?()
     }
 
-    private func positionPanel(relativeTo button: NSStatusBarButton) {
-        guard
-            let panel = window,
-            let buttonWindow = button.window
-        else { return }
-
-        let buttonFrameInScreen = buttonWindow.convertToScreen(button.frame)
-        var panelOrigin = NSPoint(
-            x: buttonFrameInScreen.maxX - panel.frame.width,
-            y: buttonFrameInScreen.minY - panel.frame.height - 8
-        )
-
-        if let screenFrame = buttonWindow.screen?.visibleFrame {
-            panelOrigin.x = min(max(panelOrigin.x, screenFrame.minX + 8), screenFrame.maxX - panel.frame.width - 8)
-            panelOrigin.y = max(panelOrigin.y, screenFrame.minY + 8)
-        }
-
-        panel.setFrameOrigin(panelOrigin)
-    }
-
-    private func startClickMonitors() {
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
-            self?.handleOutsideClick(event)
-            return event
-        }
-
-        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
-            self?.handleOutsideClick(event)
-        }
-    }
-
-    private func handleOutsideClick(_ event: NSEvent) {
-        guard let panel = window, panel.isVisible else { return }
-        let location = NSEvent.mouseLocation
-        if !panel.frame.contains(location) {
-            panel.orderOut(nil)
-        }
-    }
-
-    deinit {
-        if let localMonitor {
-            NSEvent.removeMonitor(localMonitor)
-        }
-        if let globalMonitor {
-            NSEvent.removeMonitor(globalMonitor)
-        }
-    }
 }
 
 extension StatusPanelController: NSTableViewDelegate {}

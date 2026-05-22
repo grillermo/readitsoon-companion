@@ -3,7 +3,7 @@ import AppKit
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var poller: Poller?
-    private var statusPanel: StatusPanelController!
+    private var statusWindow: StatusPanelController!
     private var savePath = ""
     private var statusText = "Monitoring"
     private var pendingTitles: [String] = []
@@ -37,30 +37,86 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 button.title = "RS"
             }
             button.target = self
-            button.action = #selector(toggleStatusPanel)
-            button.sendAction(on: [.leftMouseUp])
+            button.action = #selector(handleStatusItemClick(_:))
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
     }
 
     private func setupStatusPanel() {
-        statusPanel = StatusPanelController()
-        statusPanel.onChooseFolder = { [weak self] in
+        statusWindow = StatusPanelController()
+        statusWindow.onChooseFolder = { [weak self] in
             self?.chooseSaveFolder()
         }
-        statusPanel.onQuit = {
+        statusWindow.onQuit = {
             NSApp.terminate(nil)
         }
         refreshPanel()
     }
 
-    @objc private func toggleStatusPanel() {
-        guard let button = statusItem.button else { return }
+    @objc private func handleStatusItemClick(_ sender: NSStatusBarButton) {
         refreshPanel()
-        statusPanel.toggle(relativeTo: button)
+
+        guard let event = NSApp.currentEvent else {
+            statusWindow.toggle()
+            return
+        }
+
+        if isContextClick(event) {
+            showContextMenu()
+            return
+        }
+
+        statusWindow.toggle()
+    }
+
+    private func isContextClick(_ event: NSEvent) -> Bool {
+        switch event.type {
+        case .rightMouseUp:
+            return true
+        case .leftMouseUp:
+            return event.modifierFlags.contains(.control)
+        default:
+            return false
+        }
+    }
+
+    private func showContextMenu() {
+        let menu = buildContextMenu()
+        statusItem.menu = menu
+        statusItem.button?.performClick(nil)
+        statusItem.menu = nil
+    }
+
+    private func buildContextMenu() -> NSMenu {
+        let menu = NSMenu()
+
+        func addInfoItem(_ title: String) {
+            let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+            item.isEnabled = false
+            menu.addItem(item)
+        }
+
+        addInfoItem("ReadItSoon Companion")
+        menu.addItem(.separator())
+
+        menu.addItem(NSMenuItem(title: "Open main window", action: #selector(openMainWindow), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Quit", action: #selector(quitFromMenu), keyEquivalent: "q"))
+        menu.items.forEach { $0.target = self }
+
+        return menu
+    }
+
+    @objc private func openMainWindow() {
+        refreshPanel()
+        statusWindow.showWindow()
+    }
+
+    @objc private func quitFromMenu() {
+        NSApp.terminate(nil)
     }
 
     private func refreshPanel() {
-        statusPanel?.setContent(
+        statusWindow?.setContent(
             email: Credentials.userEmail,
             savePath: savePath,
             statusText: statusText,
