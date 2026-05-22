@@ -1,24 +1,25 @@
 import Foundation
 
-actor AsyncSemaphore {
+public actor AsyncSemaphore {
     private var value: Int
     private var waiters: [CheckedContinuation<Void, Never>] = []
 
-    init(value: Int) {
+    public init(value: Int) {
         self.value = value
     }
 
-    func wait() async {
+    public func wait() async {
         if value > 0 {
             value -= 1
             return
         }
+
         await withCheckedContinuation { continuation in
             waiters.append(continuation)
         }
     }
 
-    func signal() {
+    public func signal() {
         if waiters.isEmpty {
             value += 1
         } else {

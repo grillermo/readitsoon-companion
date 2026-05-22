@@ -1,4 +1,5 @@
 import AppKit
+import ReadItSoonCore
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
