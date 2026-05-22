@@ -13,7 +13,6 @@ At a product level, it solves one job: keep a user’s downloaded article librar
 - The app lives in the macOS menu bar (`NSStatusItem`) and runs with accessory activation policy (no persistent Dock app UI).
 - Clicking the menu bar icon opens a custom floating panel (not a standard dropdown menu).
 - The panel shows:
-  - Logged-in account email.
   - Current sync state (monitoring, downloading, complete, error).
   - Polling cadence (every 60 seconds).
   - Selected local save folder.
