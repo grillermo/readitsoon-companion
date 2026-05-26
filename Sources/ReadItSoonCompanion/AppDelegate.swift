@@ -114,8 +114,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
 
         menu.addItem(NSMenuItem(title: "Open main window", action: #selector(openMainWindow), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Logout", action: #selector(logoutFromMenu), keyEquivalent: ""))
+        menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(quitFromMenu), keyEquivalent: "q"))
         menu.items.forEach { $0.target = self }
+
+        if session == nil {
+            menu.item(withTitle: "Logout")?.isEnabled = false
+        }
 
         return menu
     }
@@ -127,6 +133,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func quitFromMenu() {
         NSApp.terminate(nil)
+    }
+
+    @objc private func logoutFromMenu() {
+        logout()
+        statusWindow.showWindow()
     }
 
     private func refreshPanel() {
@@ -149,6 +160,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func persistConfig() {
         Config.save(Config(savePath: savePath, session: session))
+    }
+
+    private func persistSignedOutConfig() {
+        Config.save(Config(savePath: savePath, session: session).signedOut())
     }
 
     // MARK: - Startup Flow
@@ -227,6 +242,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 )
             }
         }
+    }
+
+    private func logout() {
+        poller = nil
+        session = nil
+        pendingAuthEmail = nil
+        pendingTitles = []
+        lastDownloadedTitle = nil
+        statusText = "Sign in required"
+
+        persistSignedOutConfig()
+        refreshPanel()
+        statusWindow.showEmailForm(message: "Signed out. Sign in to continue.", isError: false)
     }
 
     private enum AuthContext {
@@ -335,6 +363,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func applyPollerUpdate(_ update: PollerUpdate) {
+        guard session != nil else { return }
+
         pendingTitles = update.pendingTitles
         lastDownloadedTitle = update.lastDownloadedTitle
 

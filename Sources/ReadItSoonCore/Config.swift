@@ -26,6 +26,10 @@ public struct Config: Codable, Equatable {
         self.session = session
     }
 
+    public func signedOut() -> Config {
+        Config(savePath: savePath)
+    }
+
     enum CodingKeys: String, CodingKey {
         case savePath = "save_path"
         case session

@@ -37,6 +37,16 @@ struct ConfigTests {
         #expect(Config.load(from: configURL) == nil)
     }
 
+    @Test
+    func signedOutPreservesSavePathAndRemovesSession() {
+        let config = Config(
+            savePath: "/tmp/articles",
+            session: AuthSession(email: "reader@kindle.com", token: "secret-token")
+        )
+
+        #expect(config.signedOut() == Config(savePath: "/tmp/articles"))
+    }
+
     private func makeTempDirectory() throws -> URL {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
