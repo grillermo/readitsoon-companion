@@ -12,11 +12,11 @@ This repository is a macOS menu bar companion app built with Swift Package Manag
 ## Build, Test, and Development Commands
 - `swift build`: compile the app target in debug mode.
 - `swift build -c release`: compile optimized binary used by packaging.
-- `./build.sh`: inject credentials from env vars and assemble `ReadItSoonCompanion.app`.
+- `./build.sh`: inject runtime base URL config from env vars and assemble `ReadItSoonCompanion.app`.
 - `./build-dev.sh`: local convenience flow (kills running app, builds, opens app).
 - `swift run ReadItSoonCompanion`: run directly from SwiftPM during development.
 
-Required env vars for `build.sh`: `BASE_URL`, `USER_EMAIL`, `AUTH_TOKEN`.
+Required env vars for `build.sh`: `BASE_URL`.
 
 ## Coding Style & Naming Conventions
 - Language: Swift 5.9+, AppKit-first architecture.

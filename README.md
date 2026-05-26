@@ -45,15 +45,15 @@ Notes:
 
 ## Environment Variables
 
-The app bundle build script (`build.sh`) still requires:
+The app bundle build script (`build.sh`) requires:
 
 - `BASE_URL`
-- `USER_EMAIL`
-- `AUTH_TOKEN`
 
 Example:
 
-- `BASE_URL=https://readitsoon.com USER_EMAIL=you@example.com AUTH_TOKEN=token ./build.sh`
+- `BASE_URL=https://readitsoon.com ./build.sh`
+
+At runtime, the app asks the user to sign in with a `@kindle.com` email and OTP, then stores the resulting session token in local companion config.
 
 ## Test Safety Notes
 
