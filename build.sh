@@ -9,6 +9,11 @@
 
 set -e
 
+if [ "$(uname -s)" != Darwin ]; then
+    echo "ReadItSoon Companion is a macOS menu-bar app (AppKit); skipped on $(uname -s)." >&2
+    exit 0
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
