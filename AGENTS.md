@@ -49,6 +49,3 @@ PRs should include:
 - manual verification steps run locally,
 - screenshots/GIFs for panel or menu bar UI changes,
 - linked issue/spec/doc when relevant.
-
-## Agent-Specific Workflow
-In this workspace, shell commands are expected to run through `rtk` (for example `rtk swift build`, `rtk git status`).
